@@ -9,6 +9,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const previewBox = document.getElementById('preview-box');
   const pdfIframe = document.getElementById('pdf-iframe');
   
+  // API base detection to support direct file:// access
+  const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
+
   // Tab Switching
   const tabs = document.querySelectorAll('.tab-btn');
   const tabContents = document.querySelectorAll('.tab-content');
@@ -34,6 +37,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById(inputId);
     const indicator = document.getElementById(indicatorId);
     
+    // Stop propagation on input click to prevent bubbling up and re-triggering file picker
+    input.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
     // Trigger input click when clicking dropzone text
     dropzone.addEventListener('click', (e) => {
       if (e.target.tagName !== 'INPUT') {
@@ -89,6 +97,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const input = mu.querySelector('input');
     const indicator = mu.querySelector('.mini-upload-indicator');
     
+    input.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
     mu.addEventListener('click', (e) => {
       if (e.target !== input) {
         input.click();
@@ -118,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function performCleanup() {
     if (currentBuildId) {
       try {
-        await fetch(`/api/builds/${currentBuildId}/cleanup`, { method: 'POST' });
+        await fetch(`${API_BASE}/api/builds/${currentBuildId}/cleanup`, { method: 'POST' });
         console.log(`Cleaned up build ${currentBuildId}`);
         currentBuildId = null;
       } catch (err) {
@@ -130,8 +142,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Handle unload cleanup
   window.addEventListener('beforeunload', () => {
     if (currentBuildId) {
-      // Use keepalive or sync request if possible, but standard fetch is fine
-      navigator.sendBeacon(`/api/builds/${currentBuildId}/cleanup`);
+      // Use beacon API if supported, falls back to standard fetch
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(`${API_BASE}/api/builds/${currentBuildId}/cleanup`);
+      } else {
+        fetch(`${API_BASE}/api/builds/${currentBuildId}/cleanup`, { method: 'POST', keepalive: true });
+      }
     }
   });
 
@@ -178,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     try {
-      const response = await fetch('/api/generate-start', {
+      const response = await fetch(`${API_BASE}/api/generate-start`, {
         method: 'POST',
         body: formData
       });
@@ -212,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(`/api/builds/${buildId}/status`);
+        const response = await fetch(`${API_BASE}/api/builds/${buildId}/status`);
         if (response.status === 404) {
           clearInterval(pollInterval);
           addConsoleLine('Error: Build job not found on server.', 'error');
@@ -247,11 +263,11 @@ document.addEventListener('DOMContentLoaded', () => {
           // Show PDF download action
           btnDownload.classList.remove('hidden');
           btnDownload.onclick = () => {
-            window.location.href = `/api/builds/${buildId}/download`;
+            window.location.href = `${API_BASE}/api/builds/${buildId}/download`;
           };
 
           // Render browser PDF iframe
-          pdfIframe.src = `/api/builds/${buildId}/download`;
+          pdfIframe.src = `${API_BASE}/api/builds/${buildId}/download`;
           previewBox.classList.remove('hidden');
           
           resetSubmitButton();
