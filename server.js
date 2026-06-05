@@ -51,7 +51,26 @@ function logMessage(buildId, msg) {
   }
 }
 
-function parseTextToHtml(text) {
+function getAutoDiagramTopic(headingText) {
+  const text = headingText.toLowerCase();
+  if (text.includes('introduction to machine learning')) return 'Machine Learning Model';
+  if (text.includes('artificial intelligence vs machine learning')) return 'Artificial Intelligence vs Machine Learning vs Deep Learning';
+  if (text.includes('machine learning workflow')) return 'Machine Learning Workflow';
+  if (text.includes('types of machine learning')) return 'Types of Machine Learning';
+  if (text.includes('supervised learning')) return 'Supervised Learning';
+  if (text.includes('unsupervised learning')) return 'Unsupervised Learning';
+  if (text.includes('reinforcement learning')) return 'Reinforcement Learning';
+  if (text.includes('overfitting')) return 'Overfitting and Underfitting';
+  if (text.includes('bias and variance')) return 'Bias and Variance';
+  if (text.includes('decision tree')) return 'Decision Tree';
+  if (text.includes('random forest')) return 'Random Forest';
+  if (text.includes('confusion matrix')) return 'Confusion Matrix';
+  if (text.includes('cross validation')) return 'Cross Validation';
+  if (text.includes('deep learning')) return 'Deep Learning';
+  return null;
+}
+
+function parseTextToHtml(text, autoFindDiagrams = false) {
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   let html = [];
   
@@ -108,6 +127,10 @@ function parseTextToHtml(text) {
     if (h2Match) {
       closeAll();
       html.push(`<h1 id="sec-${h2Match[1]}">${h2Match[1]}.0 ${h2Match[2]}</h1>`);
+      const topic = getAutoDiagramTopic(h2Match[2]);
+      if (topic && autoFindDiagrams) {
+        html.push(`[DIAGRAM: ${topic}]`);
+      }
       state.lastWasColon = false;
       continue;
     }
@@ -117,6 +140,10 @@ function parseTextToHtml(text) {
     if (h3Match) {
       closeAll();
       html.push(`<h2>${h3Match[1]}. ${h3Match[2]}</h2>`);
+      const topic = getAutoDiagramTopic(h3Match[2]);
+      if (topic && autoFindDiagrams) {
+        html.push(`[DIAGRAM: ${topic}]`);
+      }
       state.lastWasColon = false;
       continue;
     }
@@ -126,6 +153,10 @@ function parseTextToHtml(text) {
     if (stepMatch) {
       closeAll();
       html.push(`<h3>Step ${stepMatch[1]}: ${stepMatch[2]}</h3>`);
+      const topic = getAutoDiagramTopic(stepMatch[2]);
+      if (topic && autoFindDiagrams) {
+        html.push(`[DIAGRAM: ${topic}]`);
+      }
       state.lastWasColon = false;
       continue;
     }
@@ -259,6 +290,10 @@ function parseTextToHtml(text) {
       if (isSingleWord || endsWithColon) {
         closeAll();
         html.push(`<h3>${trimmed}</h3>`);
+        const topic = getAutoDiagramTopic(trimmed.replace(/:$/, ''));
+        if (topic && autoFindDiagrams) {
+          html.push(`[DIAGRAM: ${topic}]`);
+        }
         state.lastWasColon = endsWithColon;
         continue;
       }
@@ -382,7 +417,7 @@ app.post('/api/generate-start', upload.fields([
 
         if (isPlainText) {
           logMessage(buildId, 'Detected plain text content. Parsing to structured HTML...');
-          rawHtml = parseTextToHtml(rawHtml);
+          rawHtml = parseTextToHtml(rawHtml, autoFindDiagrams);
         }
 
         // Standardize document structure if not a full HTML page
@@ -431,7 +466,7 @@ app.post('/api/generate-start', upload.fields([
         const webDiagrams = [];
         if (autoFindDiagrams) {
           logMessage(buildId, 'Scanning document content for diagram placeholders [DIAGRAM: topic]...');
-          const diagramRegex = /\[(DIAGRAM|IMAGE|PLACEHOLDER):\\s*([^\]]+)\\s*\]/gi;
+          const diagramRegex = /\[(DIAGRAM|IMAGE|PLACEHOLDER):\s*([^\]]+)\s*\]/gi;
           let match;
           const topics = new Set();
           while ((match = diagramRegex.exec(rawHtml)) !== null) {

@@ -79,8 +79,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateIndicator() {
       if (input.files.length === 1) {
-        indicator.textContent = `Selected: ${input.files[0].name}`;
-        indicator.style.color = '#38bdf8';
+        indicator.textContent = 'file uploaded';
+        indicator.style.color = '#2AB573'; // Success color
       } else if (input.files.length > 1) {
         indicator.textContent = `Selected ${input.files.length} files`;
         indicator.style.color = '#38bdf8';

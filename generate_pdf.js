@@ -194,9 +194,9 @@ async function compilePDF(options = {}) {
     h1 {
       background-color: ${theme.secondary};
       color: #ffffff;
-      padding: 8px 16px;
+      padding: 10px 16px;
       font-family: 'Montserrat', sans-serif;
-      font-size: 14px;
+      font-size: 14.5px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -205,16 +205,17 @@ async function compilePDF(options = {}) {
       border-radius: 4px;
       page-break-after: avoid;
       break-after: avoid;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     
     h2 {
       font-family: 'Montserrat', sans-serif;
       color: ${theme.primary};
-      font-size: 12.5px;
+      font-size: 13px;
       font-weight: 700;
-      margin-top: 18px;
-      margin-bottom: 10px;
-      border-bottom: 1.5px solid ${theme.primary};
+      margin-top: 20px;
+      margin-bottom: 12px;
+      border-bottom: 2px solid ${theme.primary};
       padding-bottom: 4px;
       page-break-after: avoid;
       break-after: avoid;
@@ -223,19 +224,40 @@ async function compilePDF(options = {}) {
     h3 {
       font-family: 'Montserrat', sans-serif;
       color: ${theme.primary};
-      font-size: 11px;
+      font-size: 11.5px;
       font-weight: 700;
-      margin-top: 14px;
-      margin-bottom: 8px;
+      margin-top: 16px;
+      margin-bottom: 10px;
       page-break-after: avoid;
       break-after: avoid;
     }
     
     p, li {
-      font-size: 10px;
+      font-size: 10.5px;
       color: #333333;
       margin-top: 0;
       margin-bottom: 6px;
+      line-height: 1.55;
+      text-align: justify;
+      break-inside: avoid;
+    }
+
+    pre.code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace !important;
+      background: #f8fafc !important;
+      color: #0f172a !important;
+      border: 1px solid #e2e8f0 !important;
+      border-left: 4px solid ${theme.primary} !important;
+      border-radius: 8px !important;
+      padding: 16px 20px !important;
+      font-size: 9px !important;
+      line-height: 1.45 !important;
+      margin: 18px 0 !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03) !important;
+      white-space: pre !important;
+      overflow-x: auto !important;
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
     }
     
     .bulleted-list, .numbered-list {
@@ -416,7 +438,7 @@ async function compilePDF(options = {}) {
       transform: translate(-50%, -50%);
       width: 550px;
       height: 550px;
-      opacity: 0.2;
+      opacity: 0.06;
       z-index: -1000;
       pointer-events: none;
       background-image: url('${watermarkLogoBase64}');
@@ -510,8 +532,10 @@ async function compilePDF(options = {}) {
       const isTable = tagName === 'table';
       const isH1 = tagName === 'h1';
       const isTOC = tagName === 'nav' || child.classList.contains('table_of_contents');
+      const isPre = tagName === 'pre';
+      const isCallout = child.classList.contains('callout');
       
-      if (isImage || isTable || isH1 || isTOC) {
+      if (isImage || isTable || isH1 || isTOC || isPre || isCallout) {
         flushGroup();
         newChildren.push(child);
       } else {
