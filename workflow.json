@@ -1,0 +1,63 @@
+{
+  "name": "Generate Economic Growth and Development PDF",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "0d20d75a-cb83-4a12-87db-06cbb6494c80",
+      "name": "When clicking \"Execute\"",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 240]
+    },
+    {
+      "parameters": {
+        "command": "node d:\\n8n_project\\generate_pdf.js"
+      },
+      "id": "1e30e75b-dc84-4b23-98dc-17af8e5c492f",
+      "name": "Generate PDF",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [450, 240]
+    },
+    {
+      "parameters": {
+        "filePath": "d:\\n8n_project\\Economic Growth and Development.pdf"
+      },
+      "id": "2f40f75c-ed95-4c34-a9ed-28bf8e5c493f",
+      "name": "Read Generated PDF",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [650, 240]
+    }
+  ],
+  "connections": {
+    "When clicking \"Execute\"": {
+      "main": [
+        [
+          {
+            "node": "Generate PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate PDF": {
+      "main": [
+        [
+          {
+            "node": "Read Generated PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "staticData": null,
+  "meta": {
+    "templateId": ""
+  },
+  "pinData": {}
+}
