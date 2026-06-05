@@ -51,6 +51,267 @@ function logMessage(buildId, msg) {
   }
 }
 
+function parseTextToHtml(text) {
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  let html = [];
+  
+  let state = {
+    inList: false,
+    listType: null,
+    inTable: false,
+    inPre: false,
+    inCallout: false,
+    lastWasColon: false
+  };
+
+  function closeAll() {
+    if (state.inList) {
+      html.push(`</${state.listType}>`);
+      state.inList = false;
+      state.listType = null;
+    }
+    if (state.inTable) {
+      html.push('</tbody></table>');
+      state.inTable = false;
+    }
+    if (state.inPre) {
+      html.push('</pre>');
+      state.inPre = false;
+    }
+    if (state.inCallout) {
+      html.push('</div></div>');
+      state.inCallout = false;
+    }
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const trimmed = rawLine.trim();
+
+    // 1. Empty Line
+    if (trimmed === '') {
+      closeAll();
+      continue;
+    }
+
+    // 2. Headings (Heading breakouts must happen BEFORE active state checks)
+    // 2a. Title (first line of the document)
+    if (i === 0 && !trimmed.match(/^\d/) && trimmed.length < 80) {
+      closeAll();
+      html.push(`<h1 class="page-title">${trimmed}</h1>`);
+      state.lastWasColon = false;
+      continue;
+    }
+
+    // 2b. H2 - Numbered (e.g. 1. Introduction to Machine Learning)
+    const h2Match = trimmed.match(/^(\d+)\.\s+(.+)$/);
+    if (h2Match) {
+      closeAll();
+      html.push(`<h1 id="sec-${h2Match[1]}">${h2Match[1]}.0 ${h2Match[2]}</h1>`);
+      state.lastWasColon = false;
+      continue;
+    }
+
+    // 2c. H3 - Lettered (e.g. A. Regression)
+    const h3Match = trimmed.match(/^([A-Z])\.\s+(.+)$/);
+    if (h3Match) {
+      closeAll();
+      html.push(`<h2>${h3Match[1]}. ${h3Match[2]}</h2>`);
+      state.lastWasColon = false;
+      continue;
+    }
+
+    // 2d. H3 - Steps (e.g. Step 1: Data Collection)
+    const stepMatch = trimmed.match(/^Step\s+(\d+):\s*(.+)$/i);
+    if (stepMatch) {
+      closeAll();
+      html.push(`<h3>Step ${stepMatch[1]}: ${stepMatch[2]}</h3>`);
+      state.lastWasColon = false;
+      continue;
+    }
+
+    // 3. Active State Continuation
+    if (state.inPre) {
+      html.push(rawLine);
+      state.lastWasColon = false;
+      continue;
+    }
+
+    if (state.inTable) {
+      const parts = trimmed.split(/\t|\s{2,}/).map(p => p.trim()).filter(p => p.length > 0);
+      html.push('<tr>');
+      parts.forEach(p => {
+        html.push(`<td>${p}</td>`);
+      });
+      html.push('</tr>');
+      state.lastWasColon = false;
+      continue;
+    }
+
+    // 4. Block Lookahead logic (only run when not already in active block)
+    let blockLines = [];
+    let nextEmptyIndex = i;
+    while (nextEmptyIndex < lines.length && lines[nextEmptyIndex].trim() !== '') {
+      blockLines.push(lines[nextEmptyIndex]);
+      nextEmptyIndex++;
+    }
+
+    // Check if the block is a diagram
+    const hasDrawingChar = blockLines.some(l => /[│├└┌┐─↓↑]/.test(l));
+    
+    if (hasDrawingChar) {
+      closeAll();
+      html.push('<pre class="code">');
+      state.inPre = true;
+      html.push(rawLine);
+      state.lastWasColon = false;
+      continue;
+    }
+
+    // Check if the block is a table
+    const isTableBlock = blockLines.length >= 2 && blockLines.every(l => {
+      const t = l.trim();
+      const parts = t.split(/\t|\s{2,}/).filter(p => p.trim().length > 0);
+      return parts.length >= 2;
+    });
+
+    if (isTableBlock) {
+      const parts = trimmed.split(/\t|\s{2,}/).map(p => p.trim()).filter(p => p.length > 0);
+      closeAll();
+      html.push('<table class="simple-table"><thead><tr>');
+      parts.forEach(p => {
+        html.push(`<th class="simple-table-header-color simple-table-header"><strong>${p}</strong></th>`);
+      });
+      html.push('</tr></thead><tbody>');
+      state.inTable = true;
+      state.lastWasColon = false;
+      continue;
+    }
+
+    // 5. Callouts (Note: or Warning:)
+    const calloutMatch = trimmed.match(/^(Note|Warning|Important|Tip|Caution):\s*(.+)$/i);
+    if (calloutMatch) {
+      closeAll();
+      const type = calloutMatch[1].toLowerCase();
+      html.push(`<div class="block-color-${type === 'note' ? 'blue' : 'pink'}_background callout" style="white-space:pre-wrap;display:flex">`);
+      html.push(`<div style="font-size:1.5em"><span class="icon">🚀</span></div>`);
+      html.push(`<div style="width:100%"><strong>${calloutMatch[1]}</strong>: ${calloutMatch[2]}</div>`);
+      state.inCallout = true;
+      state.lastWasColon = false;
+      continue;
+    }
+
+    // 6. Explicit Bullets
+    const bulletMatch = trimmed.match(/^([-•*+])\s*(.+)$/);
+    if (bulletMatch) {
+      if (!state.inList || state.listType !== 'ul') {
+        closeAll();
+        html.push('<ul class="bulleted-list">');
+        state.inList = true;
+        state.listType = 'ul';
+      }
+      html.push(`<li style="list-style-type:disc">${bulletMatch[2]}</li>`);
+      state.lastWasColon = false;
+      continue;
+    }
+
+    // Explicit Ordered List
+    const olMatch = trimmed.match(/^(\d+)\)\s*(.+)$/);
+    if (olMatch) {
+      if (!state.inList || state.listType !== 'ol') {
+        closeAll();
+        html.push('<ol class="numbered-list">');
+        state.inList = true;
+        state.listType = 'ol';
+      }
+      html.push(`<li>${olMatch[2]}</li>`);
+      state.lastWasColon = false;
+      continue;
+    }
+
+    // 7. Short lines without punctuation (Implicit list items vs headings)
+    const isShort = trimmed.length < 80;
+    const hasPunctuation = /[.?!,;:)"'”]$/.test(trimmed);
+
+    if (isShort && !hasPunctuation) {
+      // If we are already in a list, continue it
+      if (state.inList) {
+        html.push(`<li style="list-style-type:disc">${trimmed}</li>`);
+        state.lastWasColon = false;
+        continue;
+      }
+
+      // If the last line ended with a colon, this line starts a list
+      if (state.lastWasColon) {
+        closeAll();
+        html.push('<ul class="bulleted-list">');
+        html.push(`<li style="list-style-type:disc">${trimmed}</li>`);
+        state.inList = true;
+        state.listType = 'ul';
+        state.lastWasColon = false;
+        continue;
+      }
+
+      // Check if it's a single word or ends with a colon -> subheading
+      const isSingleWord = trimmed.split(/\s+/).length === 1;
+      const endsWithColon = trimmed.endsWith(':');
+
+      if (isSingleWord || endsWithColon) {
+        closeAll();
+        html.push(`<h3>${trimmed}</h3>`);
+        state.lastWasColon = endsWithColon;
+        continue;
+      }
+
+      // Check lookahead for a list:
+      // If the next non-empty line also has no punctuation and is not a heading
+      let nextLineNoPunctuation = false;
+      let nextLineIsHeading = false;
+      for (let j = i + 1; j < lines.length; j++) {
+        const nextTrimmed = lines[j].trim();
+        if (nextTrimmed === '') continue;
+        if (nextTrimmed.match(/^(\d+)\./) || nextTrimmed.match(/^([A-Z])\./) || nextTrimmed.match(/^Step\s+\d+:/i)) {
+          nextLineIsHeading = true;
+          break;
+        }
+        nextLineNoPunctuation = !/[.?!,;:)"'”]$/.test(nextTrimmed) && nextTrimmed.length < 80;
+        break;
+      }
+
+      if (nextLineNoPunctuation && !nextLineIsHeading) {
+        closeAll();
+        html.push('<ul class="bulleted-list">');
+        html.push(`<li style="list-style-type:disc">${trimmed}</li>`);
+        state.inList = true;
+        state.listType = 'ul';
+        state.lastWasColon = false;
+        continue;
+      }
+
+      // Default to subheading or bold paragraph
+      closeAll();
+      html.push(`<h3>${trimmed}</h3>`);
+      state.lastWasColon = false;
+      continue;
+    }
+
+    // 8. Normal Paragraph
+    if (state.inList) {
+      closeAll();
+    }
+    
+    if (state.inCallout) {
+      html.push(`<p>${trimmed}</p>`);
+    } else {
+      html.push(`<p>${trimmed}</p>`);
+    }
+    state.lastWasColon = trimmed.endsWith(':');
+  }
+
+  closeAll();
+  return html.join('\n');
+}
+
 // 1. Get all available themes
 app.get('/api/themes', (req, res) => {
   res.json({ success: true, themes: Object.keys(THEMES) });
@@ -97,19 +358,31 @@ app.post('/api/generate-start', upload.fields([
     (async () => {
       try {
         let rawHtml = '';
+        let isPlainText = false;
         
         // Handle input document source
         if (req.files && req.files['file'] && req.files['file'][0]) {
           const uploadedFile = req.files['file'][0];
           rawHtml = fs.readFileSync(uploadedFile.path, 'utf8');
+          if (uploadedFile.originalname.endsWith('.txt')) {
+            isPlainText = true;
+          }
           // Clean up the uploaded file from uploadsDir
           fs.unlinkSync(uploadedFile.path);
           logMessage(buildId, `Read uploaded file: ${uploadedFile.originalname}`);
         } else if (pastedText.trim()) {
           rawHtml = pastedText;
+          if (!/<[a-z][\s\S]*>/i.test(rawHtml)) {
+            isPlainText = true;
+          }
           logMessage(buildId, 'Using pasted text/HTML content');
         } else {
           throw new Error('No content provided (upload a file or paste text)');
+        }
+
+        if (isPlainText) {
+          logMessage(buildId, 'Detected plain text content. Parsing to structured HTML...');
+          rawHtml = parseTextToHtml(rawHtml);
         }
 
         // Standardize document structure if not a full HTML page
