@@ -1,5 +1,17 @@
 {
+  "name": "automated-pdf-generation",
+  "version": "1.0.0",
+  "description": "Publication-quality branded PDF compilation and diagram search web application",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
   "devDependencies": {
     "puppeteer-core": "^25.1.0"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "multer": "^2.1.1"
   }
 }

@@ -1,0 +1,276 @@
+// Client side script for Branded PDF Generator Dashboard
+
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('generator-form');
+  const btnSubmit = document.getElementById('btn-submit');
+  const btnSpinner = btnSubmit.querySelector('.btn-spinner');
+  const btnDownload = document.getElementById('btn-download');
+  const consoleBox = document.getElementById('console-box');
+  const previewBox = document.getElementById('preview-box');
+  const pdfIframe = document.getElementById('pdf-iframe');
+  
+  // Tab Switching
+  const tabs = document.querySelectorAll('.tab-btn');
+  const tabContents = document.querySelectorAll('.tab-content');
+  let activeTab = 'upload-tab';
+  
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tabContents.forEach(c => c.classList.remove('active'));
+      
+      tab.classList.add('active');
+      activeTab = tab.getAttribute('data-tab');
+      document.getElementById(activeTab).classList.add('active');
+    });
+  });
+
+  // Dropzone File Indicators
+  setupDropzone('doc-dropzone', 'file', 'doc-file-indicator', 'Browse or drop HTML/txt file');
+  setupDropzone('images-dropzone', 'images', 'images-file-indicator', 'Browse or drop image assets');
+
+  function setupDropzone(dropzoneId, inputId, indicatorId, defaultText) {
+    const dropzone = document.getElementById(dropzoneId);
+    const input = document.getElementById(inputId);
+    const indicator = document.getElementById(indicatorId);
+    
+    // Trigger input click when clicking dropzone text
+    dropzone.addEventListener('click', (e) => {
+      if (e.target.tagName !== 'INPUT') {
+        input.click();
+      }
+    });
+
+    input.addEventListener('change', () => {
+      updateIndicator();
+    });
+
+    // Drag events
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add('active-drag');
+      }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('active-drag');
+      }, false);
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      input.files = files;
+      updateIndicator();
+    }, false);
+
+    function updateIndicator() {
+      if (input.files.length === 1) {
+        indicator.textContent = `Selected: ${input.files[0].name}`;
+        indicator.style.color = '#38bdf8';
+      } else if (input.files.length > 1) {
+        indicator.textContent = `Selected ${input.files.length} files`;
+        indicator.style.color = '#38bdf8';
+      } else {
+        indicator.textContent = defaultText;
+        indicator.style.color = '';
+      }
+    }
+  }
+
+  // Handle mini-uploads for logos
+  const miniUploads = document.querySelectorAll('.mini-upload');
+  miniUploads.forEach(mu => {
+    const input = mu.querySelector('input');
+    const indicator = mu.querySelector('.mini-upload-indicator');
+    
+    mu.addEventListener('click', (e) => {
+      if (e.target !== input) {
+        input.click();
+      }
+    });
+    
+    input.addEventListener('change', () => {
+      if (input.files.length > 0) {
+        indicator.textContent = input.files[0].name;
+        indicator.style.color = '#38bdf8';
+      }
+    });
+  });
+
+  // Log messages helper
+  function addConsoleLine(text, type = '') {
+    const line = document.createElement('div');
+    line.className = `console-line ${type}`;
+    line.textContent = text;
+    consoleBox.appendChild(line);
+    consoleBox.scrollTop = consoleBox.scrollHeight;
+  }
+
+  // Active build tracker for cleanup
+  let currentBuildId = null;
+
+  async function performCleanup() {
+    if (currentBuildId) {
+      try {
+        await fetch(`/api/builds/${currentBuildId}/cleanup`, { method: 'POST' });
+        console.log(`Cleaned up build ${currentBuildId}`);
+        currentBuildId = null;
+      } catch (err) {
+        console.error('Failed to run cleanup:', err);
+      }
+    }
+  }
+
+  // Handle unload cleanup
+  window.addEventListener('beforeunload', () => {
+    if (currentBuildId) {
+      // Use keepalive or sync request if possible, but standard fetch is fine
+      navigator.sendBeacon(`/api/builds/${currentBuildId}/cleanup`);
+    }
+  });
+
+  // Submit and start build
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    // Clean up previous build before starting new one
+    await performCleanup();
+    
+    // Reset UI
+    consoleBox.innerHTML = '';
+    previewBox.classList.add('hidden');
+    btnDownload.classList.add('hidden');
+    pdfIframe.src = '';
+    
+    // Disable submit button
+    btnSubmit.disabled = true;
+    btnSpinner.classList.remove('hidden');
+    
+    addConsoleLine('Sending documents and properties to server...', 'system-msg');
+    
+    const formData = new FormData(form);
+    
+    // If we are on the paste tab, delete file input to ensure we don't submit empty files
+    if (activeTab === 'paste-tab') {
+      formData.delete('file');
+      const textVal = document.getElementById('text_content').value;
+      if (!textVal.trim()) {
+        addConsoleLine('Error: Text content is empty!', 'error');
+        btnSubmit.disabled = false;
+        btnSpinner.classList.add('hidden');
+        return;
+      }
+    } else {
+      formData.delete('text_content');
+      const fileInput = document.getElementById('file');
+      if (fileInput.files.length === 0) {
+        addConsoleLine('Error: No document file selected!', 'error');
+        btnSubmit.disabled = false;
+        btnSpinner.classList.add('hidden');
+        return;
+      }
+    }
+    
+    try {
+      const response = await fetch('/api/generate-start', {
+        method: 'POST',
+        body: formData
+      });
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Server error initiating compilation');
+      }
+      
+      currentBuildId = result.buildId;
+      addConsoleLine(`Build job created successfully. Job ID: ${currentBuildId}`, 'system-msg');
+      addConsoleLine('Polling server logs...', 'info');
+      
+      // Start polling status
+      pollBuildStatus(currentBuildId);
+      
+    } catch (err) {
+      addConsoleLine(`Submission failed: ${err.message}`, 'error');
+      btnSubmit.disabled = false;
+      btnSpinner.classList.add('hidden');
+    }
+  });
+
+  // Polling Status Logic
+  let pollInterval = null;
+  let loggedLinesCount = 0;
+
+  function pollBuildStatus(buildId) {
+    loggedLinesCount = 0;
+    
+    pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/builds/${buildId}/status`);
+        if (response.status === 404) {
+          clearInterval(pollInterval);
+          addConsoleLine('Error: Build job not found on server.', 'error');
+          resetSubmitButton();
+          return;
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to fetch status');
+        }
+
+        // Print new logs
+        const newLogs = data.logs.slice(loggedLinesCount);
+        newLogs.forEach(log => {
+          if (log.toLowerCase().includes('error')) {
+            addConsoleLine(log, 'error');
+          } else if (log.toLowerCase().includes('success') || log.toLowerCase().includes('complete')) {
+            addConsoleLine(log, 'system-msg');
+          } else {
+            addConsoleLine(log);
+          }
+        });
+        loggedLinesCount = data.logs.length;
+
+        // Check completion status
+        if (data.status === 'success') {
+          clearInterval(pollInterval);
+          addConsoleLine('Build succeeded! Loading preview...', 'system-msg');
+          
+          // Show PDF download action
+          btnDownload.classList.remove('hidden');
+          btnDownload.onclick = () => {
+            window.location.href = `/api/builds/${buildId}/download`;
+          };
+
+          // Render browser PDF iframe
+          pdfIframe.src = `/api/builds/${buildId}/download`;
+          previewBox.classList.remove('hidden');
+          
+          resetSubmitButton();
+        } else if (data.status === 'failed') {
+          clearInterval(pollInterval);
+          addConsoleLine(`Build failed: ${data.error || 'Unknown compilation error'}`, 'error');
+          resetSubmitButton();
+        }
+        
+      } catch (err) {
+        clearInterval(pollInterval);
+        addConsoleLine(`Connection polling failed: ${err.message}`, 'error');
+        resetSubmitButton();
+      }
+    }, 800);
+  }
+
+  function resetSubmitButton() {
+    btnSubmit.disabled = false;
+    btnSpinner.classList.add('hidden');
+  }
+});

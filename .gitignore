@@ -1,4 +1,10 @@
 node_modules/
-Anuj Jindal Task/
-__MACOSX/
-
+temp_builds/
+uploads/
+test_output.pdf
+file_upload_output.pdf
+scratch/
+.env
+.env.*
+.DS_Store
+automated_pdf_generation/

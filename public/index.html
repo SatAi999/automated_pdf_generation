@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Branded PDF Generator Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@500;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="bg-glow-1"></div>
+  <div class="bg-glow-2"></div>
+  
+  <div class="app-container">
+    <header class="app-header">
+      <div class="header-logo-area">
+        <svg class="logo-icon" viewBox="0 0 24 24" width="32" height="32">
+          <path fill="currentColor" d="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M19,19H5V5H19V19M7,10H17V8H7V10M7,14H17V12H7V14M7,18H14V16H7V18Z" />
+        </svg>
+        <div class="header-text">
+          <h1>Publishing-Branded PDF Engine</h1>
+          <p>Convert raw notes into publication-ready two-column reports</p>
+        </div>
+      </div>
+    </header>
+
+    <main class="dashboard-grid">
+      <!-- Input Panel -->
+      <section class="panel control-panel">
+        <h2 class="panel-title">Document Setup</h2>
+        <form id="generator-form" enctype="multipart/form-data">
+          <!-- Text Metadata -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="subjectName">Subject / Course Name</label>
+              <input type="text" id="subjectName" name="subjectName" value="Economic and Social Issues" required>
+            </div>
+            <div class="form-group">
+              <label for="chapterName">Chapter / Document Title</label>
+              <input type="text" id="chapterName" name="chapterName" value="Economic Growth and Development" required>
+            </div>
+          </div>
+
+          <!-- Style and Theme -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="theme">Design Brand Style</label>
+              <select id="theme" name="theme">
+                <option value="brand">Anuj Jindal Theme (Emerald & Blue)</option>
+                <option value="corporate">Corporate (Deep Navy & Azure)</option>
+                <option value="crimson">Classic Editorial (Crimson & Amber)</option>
+                <option value="dark">Charcoal Modern (Charcoal & Purple)</option>
+              </select>
+            </div>
+            <div class="form-group toggle-group">
+              <label class="switch-label" for="autoFindDiagrams">
+                <span>Web Image Search</span>
+                <span class="subtext">Auto-fetch diagrams from DuckDuckGo</span>
+              </label>
+              <label class="switch">
+                <input type="checkbox" id="autoFindDiagrams" name="autoFindDiagrams" value="true" checked>
+                <span class="slider round"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Document Upload / Input -->
+          <div class="form-group">
+            <label>Notes Document Source</label>
+            <div class="tab-header">
+              <button type="button" class="tab-btn active" data-tab="upload-tab">Upload Document</button>
+              <button type="button" class="tab-btn" data-tab="paste-tab">Paste Raw Content</button>
+            </div>
+            
+            <div id="upload-tab" class="tab-content active">
+              <div class="file-dropzone" id="doc-dropzone">
+                <svg class="upload-icon" viewBox="0 0 24 24" width="36" height="36">
+                  <path fill="currentColor" d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M12.5,18H11V14H8.5L12,10.5L15.5,14H13V18H12.5M13,9V3.5L18.5,9H13Z"/>
+                </svg>
+                <p class="dropzone-text">Drag & drop your HTML or text file here, or <span class="browse-link">browse</span></p>
+                <input type="file" id="file" name="file" accept=".html,.txt">
+                <div class="selected-file-indicator" id="doc-file-indicator">No file selected</div>
+              </div>
+            </div>
+            
+            <div id="paste-tab" class="tab-content">
+              <textarea id="text_content" name="text_content" placeholder="Paste your HTML markup or plain text here..." rows="8"></textarea>
+            </div>
+          </div>
+
+          <!-- Asset Uploads -->
+          <div class="form-group">
+            <label>Branding Logos (Optional)</label>
+            <div class="logo-uploads-grid">
+              <div class="mini-upload" id="header-logo-upload">
+                <span>Header Logo</span>
+                <input type="file" name="header_logo" accept="image/*">
+                <div class="mini-upload-indicator">Default brand logo</div>
+              </div>
+              <div class="mini-upload" id="watermark-logo-upload">
+                <span>Watermark Logo</span>
+                <input type="file" name="watermark_logo" accept="image/*">
+                <div class="mini-upload-indicator">Default cropped logo</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Custom Local Images -->
+          <div class="form-group">
+            <label for="images">Local Referenced Images (Optional)</label>
+            <div class="file-dropzone" id="images-dropzone">
+              <svg class="upload-icon" viewBox="0 0 24 24" width="30" height="30">
+                <path fill="currentColor" d="M22,16V4A2,2 0 0,0 20,2H8A2,2 0 0,0 6,4V16A2,2 0 0,0 8,18H20A2,2 0 0,0 22,16M11,12L13.03,14.71L16,11L20,16H8L11,12M2,6V20A2,2 0 0,0 4,22H18V20H4V6H2Z" />
+              </svg>
+              <p class="dropzone-text">Upload any local images referenced in your HTML <span class="browse-link">browse</span></p>
+              <input type="file" id="images" name="images" accept="image/*" multiple>
+              <div class="selected-file-indicator" id="images-file-indicator">No images uploaded</div>
+            </div>
+          </div>
+
+          <!-- Action Button -->
+          <button type="submit" class="btn-primary" id="btn-submit">
+            <span>Compile PDF Document</span>
+            <div class="btn-spinner hidden"></div>
+          </button>
+        </form>
+      </section>
+
+      <!-- Preview Panel -->
+      <section class="panel console-panel">
+        <div class="panel-header-with-action">
+          <h2 class="panel-title">Compilation Console</h2>
+          <button class="btn-secondary hidden" id="btn-download">Download PDF</button>
+        </div>
+        
+        <div class="console-box" id="console-box">
+          <div class="console-line system-msg">PDF Compilation Engine ready. Configure options and click compile.</div>
+        </div>
+        
+        <div class="preview-box hidden" id="preview-box">
+          <div class="preview-header">
+            <h3>Document Preview</h3>
+            <span class="preview-status">Ready</span>
+          </div>
+          <div class="preview-frame-container">
+            <iframe id="pdf-iframe" src="" frameborder="0"></iframe>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
