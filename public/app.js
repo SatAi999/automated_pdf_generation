@@ -36,6 +36,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const dropzone = document.getElementById(dropzoneId);
     const input = document.getElementById(inputId);
     const indicator = document.getElementById(indicatorId);
+    const textEl = dropzone.querySelector('.dropzone-text');
+    const originalTextHTML = textEl ? textEl.innerHTML : '';
     
     // Stop propagation on input click to prevent bubbling up and re-triggering file picker
     input.addEventListener('click', (e) => {
@@ -78,15 +80,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }, false);
 
     function updateIndicator() {
-      if (input.files.length === 1) {
-        indicator.textContent = 'file uploaded';
-        indicator.style.color = '#2AB573'; // Success color
-      } else if (input.files.length > 1) {
-        indicator.textContent = `Selected ${input.files.length} files`;
-        indicator.style.color = '#38bdf8';
+      if (input.files.length > 0) {
+        dropzone.classList.add('has-file');
+        if (input.files.length === 1) {
+          const filename = input.files[0].name;
+          indicator.textContent = 'file uploaded';
+          indicator.style.color = '#2AB573'; // Success color
+          if (textEl) {
+            textEl.innerHTML = `File uploaded: <strong style="color: #2AB573">${filename}</strong>`;
+          }
+          addConsoleLine(`File selected: "${filename}" (${(input.files[0].size / 1024).toFixed(1)} KB)`, 'info');
+        } else {
+          indicator.textContent = `Selected ${input.files.length} files`;
+          indicator.style.color = '#38bdf8';
+          if (textEl) {
+            textEl.innerHTML = `Selected <strong style="color: #38bdf8">${input.files.length} files</strong>`;
+          }
+          addConsoleLine(`Selected ${input.files.length} asset files for compilation.`, 'info');
+        }
       } else {
+        dropzone.classList.remove('has-file');
         indicator.textContent = defaultText;
         indicator.style.color = '';
+        if (textEl) {
+          textEl.innerHTML = originalTextHTML;
+        }
       }
     }
   }

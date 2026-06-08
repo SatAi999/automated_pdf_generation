@@ -232,13 +232,21 @@ async function compilePDF(options = {}) {
       break-after: avoid;
     }
     
-    p, li {
+    p {
       font-size: 10.5px;
       color: #333333;
       margin-top: 0;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
       line-height: 1.55;
       text-align: justify;
+    }
+    
+    li {
+      font-size: 10.5px;
+      color: #333333;
+      margin-top: 0;
+      margin-bottom: 4px;
+      line-height: 1.55;
       break-inside: avoid;
     }
 

@@ -52,22 +52,30 @@ function logMessage(buildId, msg) {
 }
 
 function getAutoDiagramTopic(headingText) {
-  const text = headingText.toLowerCase();
-  if (text.includes('introduction to machine learning')) return 'Machine Learning Model';
-  if (text.includes('artificial intelligence vs machine learning')) return 'Artificial Intelligence vs Machine Learning vs Deep Learning';
-  if (text.includes('machine learning workflow')) return 'Machine Learning Workflow';
-  if (text.includes('types of machine learning')) return 'Types of Machine Learning';
-  if (text.includes('supervised learning')) return 'Supervised Learning';
-  if (text.includes('unsupervised learning')) return 'Unsupervised Learning';
-  if (text.includes('reinforcement learning')) return 'Reinforcement Learning';
-  if (text.includes('overfitting')) return 'Overfitting and Underfitting';
-  if (text.includes('bias and variance')) return 'Bias and Variance';
-  if (text.includes('decision tree')) return 'Decision Tree';
-  if (text.includes('random forest')) return 'Random Forest';
-  if (text.includes('confusion matrix')) return 'Confusion Matrix';
-  if (text.includes('cross validation')) return 'Cross Validation';
-  if (text.includes('deep learning')) return 'Deep Learning';
-  return null;
+  // Strip any leading numbers/dots/spaces
+  let cleanText = headingText.replace(/^\d+[\.\s]*/, '').trim();
+  
+  const lower = cleanText.toLowerCase();
+  
+  // Generic headings that should NOT trigger a diagram search
+  const genericHeadings = [
+    'introduction', 'summary', 'conclusion', 'benefits', 'types', 'goal', 
+    'tasks', 'uses', 'process', 'example', 'overview', 'definition', 
+    'advantages', 'disadvantages', 'applications', 'libraries', 'python libraries',
+    'real-world applications', 'monitoring', 'deployment', 'evaluation', 'training',
+    'dataset', 'features and labels', 'training set', 'validation set', 'test set',
+    'good fit', 'bias', 'variance', 'linear regression', 'logistic regression',
+    'support vector machine', 'naive bayes', 'k-means', 'hierarchical clustering',
+    'pca', 't-sne', 'mae', 'mse', 'rmse', 'r² score', 'accuracy', 'precision',
+    'recall', 'f1 score', 'standardization', 'normalization'
+  ];
+  
+  if (genericHeadings.includes(lower) || lower.length < 5 || lower.length > 80) {
+    return null;
+  }
+  
+  // Return the clean heading text itself!
+  return cleanText;
 }
 
 function parseTextToHtml(text, autoFindDiagrams = false) {
@@ -122,11 +130,13 @@ function parseTextToHtml(text, autoFindDiagrams = false) {
       continue;
     }
 
-    // 2b. H2 - Numbered (e.g. 1. Introduction to Machine Learning)
-    const h2Match = trimmed.match(/^(\d+)\.\s+(.+)$/);
+    // 2b. H2 - Numbered (e.g. 1. Introduction or 1.0 What is an AI Agent)
+    const h2Match = trimmed.match(/^(\d+(?:\.\d+)*)\.?\s+(.+)$/);
     if (h2Match) {
       closeAll();
-      html.push(`<h1 id="sec-${h2Match[1]}">${h2Match[1]}.0 ${h2Match[2]}</h1>`);
+      const hasDot = h2Match[1].includes('.');
+      const displayNum = hasDot ? h2Match[1] : `${h2Match[1]}.0`;
+      html.push(`<h1 id="sec-${h2Match[1]}">${displayNum} ${h2Match[2]}</h1>`);
       const topic = getAutoDiagramTopic(h2Match[2]);
       if (topic && autoFindDiagrams) {
         html.push(`[DIAGRAM: ${topic}]`);
@@ -135,11 +145,11 @@ function parseTextToHtml(text, autoFindDiagrams = false) {
       continue;
     }
 
-    // 2c. H3 - Lettered (e.g. A. Regression)
-    const h3Match = trimmed.match(/^([A-Z])\.\s+(.+)$/);
+    // 2c. H3 - Lettered (e.g. A. Regression or a. Agent Brain)
+    const h3Match = trimmed.match(/^([A-Za-z])\.\s+(.+)$/);
     if (h3Match) {
       closeAll();
-      html.push(`<h2>${h3Match[1]}. ${h3Match[2]}</h2>`);
+      html.push(`<h2>${h3Match[1].toUpperCase()}. ${h3Match[2]}</h2>`);
       const topic = getAutoDiagramTopic(h3Match[2]);
       if (topic && autoFindDiagrams) {
         html.push(`[DIAGRAM: ${topic}]`);
@@ -378,7 +388,7 @@ app.post('/api/generate-start', upload.fields([
     const themeName = req.body.theme || 'brand';
     const headerLogoUrl = req.body.headerLogoUrl || '';
     const watermarkLogoUrl = req.body.watermarkLogoUrl || '';
-    const autoFindDiagrams = req.body.autoFindDiagrams === 'true';
+    const autoFindDiagrams = req.body.autoFindDiagrams === 'true' || req.body.autoFindDiagrams === true;
     const pastedText = req.body.text_content || '';
 
     // Create custom folder for this build
@@ -399,7 +409,9 @@ app.post('/api/generate-start', upload.fields([
         if (req.files && req.files['file'] && req.files['file'][0]) {
           const uploadedFile = req.files['file'][0];
           rawHtml = fs.readFileSync(uploadedFile.path, 'utf8');
-          if (uploadedFile.originalname.endsWith('.txt')) {
+          
+          const filenameLower = uploadedFile.originalname.toLowerCase();
+          if (filenameLower.endsWith('.txt') || !/<[a-z][\s\S]*>/i.test(rawHtml)) {
             isPlainText = true;
           }
           // Clean up the uploaded file from uploadsDir

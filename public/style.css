@@ -251,6 +251,24 @@ input[type="text"]:focus, select:focus, textarea:focus {
   background: rgba(15, 23, 42, 0.5);
 }
 
+.file-dropzone.has-file {
+  border-color: var(--secondary) !important;
+  background: rgba(42, 181, 115, 0.08) !important;
+}
+
+.file-dropzone.has-file .upload-icon {
+  color: var(--secondary) !important;
+}
+
+#images-dropzone.has-file {
+  border-color: #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.08) !important;
+}
+
+#images-dropzone.has-file .upload-icon {
+  color: #38bdf8 !important;
+}
+
 .file-dropzone input[type="file"] {
   position: absolute;
   top: 0;

@@ -4,79 +4,99 @@ const https = require('https');
 const http = require('http');
 const { URL } = require('url');
 
-// Fetch a text page
+// Fetch a text page with redirect support
 function fetchText(urlStr, headers = {}) {
   return new Promise((resolve, reject) => {
-    const parsedUrl = new URL(urlStr);
-    const client = parsedUrl.protocol === 'https:' ? https : http;
-    
-    const options = {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        ...headers
-      }
-    };
-    
-    client.get(urlStr, options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        resolve(data);
-      });
-    }).on('error', reject);
+    try {
+      const parsedUrl = new URL(urlStr);
+      const client = parsedUrl.protocol === 'https:' ? https : http;
+      
+      const options = {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          ...headers
+        },
+        rejectUnauthorized: false
+      };
+      
+      client.get(urlStr, options, (res) => {
+        // Follow redirects
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          let redirectUrl = res.headers.location;
+          if (!redirectUrl.startsWith('http')) {
+            redirectUrl = new URL(redirectUrl, urlStr).href;
+          }
+          resolve(fetchText(redirectUrl, headers));
+          return;
+        }
+        
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          resolve(data);
+        });
+      }).on('error', reject);
+    } catch (e) {
+      reject(e);
+    }
   });
 }
 
 // Download a binary file
 function downloadFile(urlStr, destPath) {
   return new Promise((resolve, reject) => {
-    const parsedUrl = new URL(urlStr);
-    const client = parsedUrl.protocol === 'https:' ? https : http;
-    
-    const options = {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      },
-      timeout: 10000 // 10s timeout
-    };
-    
-    const request = client.get(urlStr, options, (res) => {
-      // Follow redirects
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        let redirectUrl = res.headers.location;
-        if (!redirectUrl.startsWith('http')) {
-          redirectUrl = new URL(redirectUrl, urlStr).href;
+    try {
+      const parsedUrl = new URL(urlStr);
+      const client = parsedUrl.protocol === 'https:' ? https : http;
+      
+      const options = {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        timeout: 10000, // 10s timeout
+        rejectUnauthorized: false // Ignore certificate errors
+      };
+      
+      const request = client.get(urlStr, options, (res) => {
+        // Follow redirects
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          let redirectUrl = res.headers.location;
+          if (!redirectUrl.startsWith('http')) {
+            redirectUrl = new URL(redirectUrl, urlStr).href;
+          }
+          resolve(downloadFile(redirectUrl, destPath));
+          return;
         }
-        resolve(downloadFile(redirectUrl, destPath));
-        return;
-      }
-      
-      if (res.statusCode !== 200) {
-        reject(new Error(`Failed to download file: Status ${res.statusCode}`));
-        return;
-      }
-      
-      const fileStream = fs.createWriteStream(destPath);
-      res.pipe(fileStream);
-      
-      fileStream.on('finish', () => {
-        fileStream.close();
-        resolve(destPath);
+        
+        if (res.statusCode !== 200) {
+          reject(new Error(`Failed to download file: Status ${res.statusCode}`));
+          return;
+        }
+        
+        const fileStream = fs.createWriteStream(destPath);
+        res.pipe(fileStream);
+        
+        fileStream.on('finish', () => {
+          fileStream.close();
+          resolve(destPath);
+        });
+        
+        fileStream.on('error', (err) => {
+          fs.unlink(destPath, () => {});
+          reject(err);
+        });
       });
       
-      fileStream.on('error', (err) => {
-        fs.unlink(destPath, () => {});
-        reject(err);
+      request.on('error', reject);
+      request.on('timeout', () => {
+        request.destroy();
+        reject(new Error('Request timeout'));
       });
-    });
-    
-    request.on('error', reject);
-    request.on('timeout', () => {
-      request.destroy();
-      reject(new Error('Request timeout'));
-    });
+    } catch (e) {
+      reject(e);
+    }
   });
 }
 
@@ -144,12 +164,17 @@ async function searchDDGImages(query) {
 
 // Search and download a single relevant diagram image
 async function downloadRelevantDiagram(topic, outputDir) {
+  // Clean special characters from the search query
+  const cleanTopic = topic.replace(/[?!\(\):;"'’\-,\|]/g, ' ').replace(/\s+/g, ' ').trim();
+  
   // Enhance query to find diagrams/infographics specifically
   const searchQueries = [
-    `${topic} diagram flowchart`,
-    `${topic} infographic chart`,
-    `${topic} process diagram`,
-    `${topic} model chart`
+    `${cleanTopic} diagram flowchart`,
+    `${cleanTopic} infographic chart`,
+    `${cleanTopic} architecture diagram`,
+    `${cleanTopic} workflow process`,
+    `${cleanTopic} concept map`,
+    cleanTopic
   ];
   
   if (!fs.existsSync(outputDir)) {
@@ -164,17 +189,33 @@ async function downloadRelevantDiagram(topic, outputDir) {
       // Loop through top results and try to download one
       // We want larger, high-quality images but not too massive
       const filtered = results.filter(r => {
-        // Exclude base64 inline images and try to get standard PNG/JPEG
-        return r.image.startsWith('http') && 
-               (r.image.endsWith('.png') || r.image.endsWith('.jpg') || r.image.endsWith('.jpeg'));
+        if (!r.image.startsWith('http')) return false;
+        try {
+          // Parse path using URL class to ignore query parameters
+          const pathname = new URL(r.image).pathname.toLowerCase();
+          return pathname.endsWith('.png') || 
+                 pathname.endsWith('.jpg') || 
+                 pathname.endsWith('.jpeg') || 
+                 pathname.endsWith('.webp') || 
+                 pathname.endsWith('.gif');
+        } catch (e) {
+          return false;
+        }
       });
       
       const candidates = filtered.length > 0 ? filtered : results;
       
       for (let i = 0; i < Math.min(5, candidates.length); i++) {
         const candidate = candidates[i];
-        const ext = path.extname(new URL(candidate.image).pathname) || '.png';
-        const safeExt = ['.png', '.jpg', '.jpeg', '.gif'].includes(ext.toLowerCase()) ? ext : '.png';
+        let ext = '.png';
+        try {
+          const pathname = new URL(candidate.image).pathname;
+          ext = path.extname(pathname) || '.png';
+        } catch (e) {
+          // Fallback if URL parsing fails
+        }
+        
+        const safeExt = ['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(ext.toLowerCase()) ? ext : '.png';
         const filename = `web_diagram_${Date.now()}${safeExt}`;
         const destPath = path.join(outputDir, filename);
         
